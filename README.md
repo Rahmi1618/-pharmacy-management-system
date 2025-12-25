@@ -6,7 +6,7 @@ The Pharmacy Management System is a software application designed to streamline 
  Group Members
 1. Rehemet Muhamed ID    1618/16   GitHub username   Rahmi1618
 2. Tsion Melake    ID    1974/16   GitHub Username
-3. Hawlet Yimam    ID    1001/16   GitHub Username
+3. Hawlet Yimam    ID    1001/16   GitHub Username   hawlet-yimam
 4. Ekram Yasin     ID    0638/16   GitHub Username  Ekramyasin12
 5. Mindelah Jemal  ID    1389/16   GitHub Username
 
