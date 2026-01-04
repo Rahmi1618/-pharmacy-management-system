@@ -1,0 +1,682 @@
+-- =============================================
+-- DATABASE: PHARMACY_MANAGEMENT_SYSTEM
+-- Description: Complete schema for PMS
+-- =============================================
+
+CREATE DATABASE IF NOT EXISTS pharmacy_management_system;
+USE pharmacy_management_system;
+
+-- =============================================
+-- 1. USER MANAGEMENT TABLES
+-- =============================================
+
+-- User roles definition
+CREATE TABLE Roles (
+    role_id INT PRIMARY KEY AUTO_INCREMENT,
+    role_name VARCHAR(50) UNIQUE NOT NULL,
+    description VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Users table (for authentication and roles)
+CREATE TABLE Users (
+    user_id INT PRIMARY KEY AUTO_INCREMENT,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    email VARCHAR(100) UNIQUE,
+    role_id INT NOT NULL,
+    full_name VARCHAR(100) NOT NULL,
+    phone VARCHAR(20),
+    address TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    last_login TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (role_id) REFERENCES Roles(role_id) ON DELETE RESTRICT
+);
+
+-- User sessions (for login tracking)
+CREATE TABLE User_Sessions (
+    session_id VARCHAR(100) PRIMARY KEY,
+    user_id INT NOT NULL,
+    login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    logout_time TIMESTAMP NULL,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
+);
+
+-- =============================================
+-- 2. INVENTORY MANAGEMENT TABLES
+-- =============================================
+
+-- Medicine categories
+CREATE TABLE Categories (
+    category_id INT PRIMARY KEY AUTO_INCREMENT,
+    category_name VARCHAR(100) UNIQUE NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Medicine manufacturers
+CREATE TABLE Manufacturers (
+    manufacturer_id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL,
+    contact_person VARCHAR(100),
+    phone VARCHAR(20),
+    email VARCHAR(100),
+    address TEXT,
+    license_number VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Suppliers table
+CREATE TABLE Suppliers (
+    supplier_id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL,
+    contact_person VARCHAR(100),
+    phone VARCHAR(20),
+    email VARCHAR(100),
+    address TEXT,
+    tax_id VARCHAR(50),
+    payment_terms VARCHAR(100),
+    is_active BOOLEAN DEFAULT TRUE,
+    rating DECIMAL(3,2) DEFAULT 0.0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Medicines table (Main inventory)
+CREATE TABLE Medicines (
+    medicine_id INT PRIMARY KEY AUTO_INCREMENT,
+    medicine_code VARCHAR(50) UNIQUE NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    generic_name VARCHAR(100),
+    brand VARCHAR(50),
+    category_id INT,
+    manufacturer_id INT,
+    supplier_id INT,
+    unit_type ENUM('Tablet', 'Capsule', 'Syrup', 'Injection', 'Cream', 'Drops', 'Other') DEFAULT 'Tablet',
+    pack_size VARCHAR(50), -- e.g., "10 tablets", "100ml"
+    price DECIMAL(10,2) NOT NULL CHECK (price >= 0),
+    cost_price DECIMAL(10,2) NOT NULL, -- Purchase price from supplier
+    quantity INT NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+    reorder_level INT DEFAULT 10,
+    expiry_date DATE NOT NULL,
+    batch_number VARCHAR(50) NOT NULL,
+    prescription_required BOOLEAN DEFAULT FALSE,
+    description TEXT,
+    image_url VARCHAR(255),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (category_id) REFERENCES Categories(category_id) ON DELETE SET NULL,
+    FOREIGN KEY (manufacturer_id) REFERENCES Manufacturers(manufacturer_id) ON DELETE SET NULL,
+    FOREIGN KEY (supplier_id) REFERENCES Suppliers(supplier_id) ON DELETE SET NULL,
+    INDEX idx_expiry (expiry_date),
+    INDEX idx_quantity (quantity),
+    INDEX idx_supplier (supplier_id)
+);
+
+-- =============================================
+-- 3. CUSTOMER MANAGEMENT TABLES
+-- =============================================
+
+-- Customer types
+CREATE TABLE Customer_Types (
+    type_id INT PRIMARY KEY AUTO_INCREMENT,
+    type_name VARCHAR(50) UNIQUE NOT NULL,
+    discount_percentage DECIMAL(5,2) DEFAULT 0.0,
+    description TEXT
+);
+
+-- Customers table
+CREATE TABLE Customers (
+    customer_id INT PRIMARY KEY AUTO_INCREMENT,
+    customer_code VARCHAR(50) UNIQUE NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    phone VARCHAR(20),
+    email VARCHAR(100),
+    address TEXT,
+    customer_type_id INT DEFAULT 1,
+    date_of_birth DATE,
+    gender ENUM('Male', 'Female', 'Other'),
+    allergies TEXT,
+    medical_history TEXT,
+    total_purchases DECIMAL(12,2) DEFAULT 0.0,
+    loyalty_points INT DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_type_id) REFERENCES Customer_Types(type_id) ON DELETE SET NULL,
+    INDEX idx_customer_code (customer_code),
+    INDEX idx_phone (phone)
+);
+
+-- =============================================
+-- 4. SALES & BILLING TABLES
+-- =============================================
+
+-- Sales table (Invoice header)
+CREATE TABLE Sales (
+    sale_id INT PRIMARY KEY AUTO_INCREMENT,
+    invoice_number VARCHAR(50) UNIQUE NOT NULL,
+    customer_id INT,
+    user_id INT NOT NULL,
+    total_items INT NOT NULL DEFAULT 0,
+    subtotal DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    discount_amount DECIMAL(10,2) DEFAULT 0.00,
+    tax_amount DECIMAL(10,2) DEFAULT 0.00,
+    total_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    paid_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    change_amount DECIMAL(10,2) DEFAULT 0.00,
+    payment_method ENUM('Cash', 'Card', 'Mobile Payment', 'Credit') DEFAULT 'Cash',
+    payment_status ENUM('Paid', 'Pending', 'Partial', 'Cancelled') DEFAULT 'Paid',
+    sale_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES Customers(customer_id) ON DELETE SET NULL,
+    FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE RESTRICT,
+    INDEX idx_invoice (invoice_number),
+    INDEX idx_sale_date (sale_date),
+    INDEX idx_customer (customer_id)
+);
+
+-- Sale Items (Invoice details)
+CREATE TABLE Sale_Items (
+    sale_item_id INT PRIMARY KEY AUTO_INCREMENT,
+    sale_id INT NOT NULL,
+    medicine_id INT NOT NULL,
+    batch_number VARCHAR(50) NOT NULL,
+    quantity INT NOT NULL CHECK (quantity > 0),
+    unit_price DECIMAL(10,2) NOT NULL,
+    discount_percentage DECIMAL(5,2) DEFAULT 0.00,
+    total_price DECIMAL(10,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (sale_id) REFERENCES Sales(sale_id) ON DELETE CASCADE,
+    FOREIGN KEY (medicine_id) REFERENCES Medicines(medicine_id) ON DELETE RESTRICT,
+    INDEX idx_sale_medicine (sale_id, medicine_id)
+);
+
+-- =============================================
+-- 5. PURCHASE & SUPPLIER MANAGEMENT TABLES
+-- =============================================
+
+-- Purchase Orders (from suppliers)
+CREATE TABLE Purchase_Orders (
+    order_id INT PRIMARY KEY AUTO_INCREMENT,
+    po_number VARCHAR(50) UNIQUE NOT NULL,
+    supplier_id INT NOT NULL,
+    user_id INT NOT NULL,
+    order_date DATE NOT NULL,
+    expected_delivery DATE,
+    subtotal DECIMAL(12,2) DEFAULT 0.00,
+    tax_amount DECIMAL(10,2) DEFAULT 0.00,
+    shipping_cost DECIMAL(10,2) DEFAULT 0.00,
+    total_cost DECIMAL(12,2) DEFAULT 0.00,
+    status ENUM('Draft', 'Ordered', 'Received', 'Partially Received', 'Cancelled') DEFAULT 'Draft',
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (supplier_id) REFERENCES Suppliers(supplier_id) ON DELETE RESTRICT,
+    FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE RESTRICT,
+    INDEX idx_po_number (po_number),
+    INDEX idx_supplier (supplier_id),
+    INDEX idx_status (status)
+);
+
+-- Purchase Order Items
+CREATE TABLE Purchase_Order_Items (
+    po_item_id INT PRIMARY KEY AUTO_INCREMENT,
+    order_id INT NOT NULL,
+    medicine_id INT NOT NULL,
+    quantity_ordered INT NOT NULL CHECK (quantity_ordered > 0),
+    quantity_received INT DEFAULT 0,
+    cost_per_unit DECIMAL(10,2) NOT NULL,
+    expiry_date DATE NOT NULL,
+    batch_number VARCHAR(50),
+    total_cost DECIMAL(10,2) NOT NULL,
+    received_date DATE NULL,
+    status ENUM('Pending', 'Received', 'Cancelled') DEFAULT 'Pending',
+    FOREIGN KEY (order_id) REFERENCES Purchase_Orders(order_id) ON DELETE CASCADE,
+    FOREIGN KEY (medicine_id) REFERENCES Medicines(medicine_id) ON DELETE RESTRICT,
+    INDEX idx_order_medicine (order_id, medicine_id)
+);
+
+-- =============================================
+-- 6. STOCK & AUDIT TABLES
+-- =============================================
+
+-- Stock adjustment reasons
+CREATE TABLE Adjustment_Reasons (
+    reason_id INT PRIMARY KEY AUTO_INCREMENT,
+    reason_name VARCHAR(100) UNIQUE NOT NULL,
+    description TEXT,
+    affects_cost BOOLEAN DEFAULT FALSE
+);
+
+-- Stock adjustments
+CREATE TABLE Stock_Adjustments (
+    adjustment_id INT PRIMARY KEY AUTO_INCREMENT,
+    medicine_id INT NOT NULL,
+    batch_number VARCHAR(50),
+    adjustment_date DATE NOT NULL,
+    reason_id INT NOT NULL,
+    quantity_change INT NOT NULL, -- Positive for addition, negative for deduction
+    previous_quantity INT NOT NULL,
+    new_quantity INT NOT NULL,
+    unit_cost DECIMAL(10,2),
+    total_value_change DECIMAL(10,2),
+    notes TEXT,
+    adjusted_by INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (medicine_id) REFERENCES Medicines(medicine_id) ON DELETE RESTRICT,
+    FOREIGN KEY (reason_id) REFERENCES Adjustment_Reasons(reason_id) ON DELETE RESTRICT,
+    FOREIGN KEY (adjusted_by) REFERENCES Users(user_id) ON DELETE RESTRICT,
+    INDEX idx_medicine_date (medicine_id, adjustment_date)
+);
+
+-- Stock movements log
+CREATE TABLE Stock_Movements (
+    movement_id INT PRIMARY KEY AUTO_INCREMENT,
+    medicine_id INT NOT NULL,
+    batch_number VARCHAR(50) NOT NULL,
+    movement_type ENUM('Purchase', 'Sale', 'Adjustment', 'Transfer', 'Expired', 'Return') NOT NULL,
+    reference_id INT NOT NULL, -- Links to sale_id, purchase_id, or adjustment_id
+    quantity_change INT NOT NULL,
+    stock_before INT NOT NULL,
+    stock_after INT NOT NULL,
+    unit_price DECIMAL(10,2),
+    total_value DECIMAL(10,2),
+    movement_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    performed_by INT,
+    notes TEXT,
+    FOREIGN KEY (medicine_id) REFERENCES Medicines(medicine_id) ON DELETE RESTRICT,
+    FOREIGN KEY (performed_by) REFERENCES Users(user_id) ON DELETE SET NULL,
+    INDEX idx_medicine_movement (medicine_id, movement_date),
+    INDEX idx_movement_type (movement_type, reference_id)
+);
+
+-- =============================================
+-- 7. EXPIRY & RETURNS MANAGEMENT
+-- =============================================
+
+-- Expired medicines log
+CREATE TABLE Expired_Medicines (
+    expiry_id INT PRIMARY KEY AUTO_INCREMENT,
+    medicine_id INT NOT NULL,
+    batch_number VARCHAR(50) NOT NULL,
+    quantity_expired INT NOT NULL,
+    expiry_date DATE NOT NULL,
+    original_cost DECIMAL(10,2),
+    total_loss DECIMAL(10,2),
+    disposal_method ENUM('Destroyed', 'Returned', 'Donated', 'Other'),
+    disposal_date DATE,
+    disposal_notes TEXT,
+    recorded_by INT NOT NULL,
+    recorded_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (medicine_id) REFERENCES Medicines(medicine_id) ON DELETE RESTRICT,
+    FOREIGN KEY (recorded_by) REFERENCES Users(user_id) ON DELETE RESTRICT,
+    INDEX idx_expiry_date (expiry_date)
+);
+
+-- Returns from customers
+CREATE TABLE Customer_Returns (
+    return_id INT PRIMARY KEY AUTO_INCREMENT,
+    return_number VARCHAR(50) UNIQUE NOT NULL,
+    sale_id INT NOT NULL,
+    customer_id INT NOT NULL,
+    user_id INT NOT NULL,
+    return_date DATE NOT NULL,
+    total_refund DECIMAL(10,2) NOT NULL,
+    reason TEXT,
+    status ENUM('Pending', 'Approved', 'Rejected', 'Refunded') DEFAULT 'Pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (sale_id) REFERENCES Sales(sale_id) ON DELETE RESTRICT,
+    FOREIGN KEY (customer_id) REFERENCES Customers(customer_id) ON DELETE RESTRICT,
+    FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE RESTRICT
+);
+
+-- Return items
+CREATE TABLE Return_Items (
+    return_item_id INT PRIMARY KEY AUTO_INCREMENT,
+    return_id INT NOT NULL,
+    medicine_id INT NOT NULL,
+    quantity_returned INT NOT NULL,
+    unit_price DECIMAL(10,2) NOT NULL,
+    refund_amount DECIMAL(10,2) NOT NULL,
+    batch_number VARCHAR(50),
+    reason TEXT,
+    FOREIGN KEY (return_id) REFERENCES Customer_Returns(return_id) ON DELETE CASCADE,
+    FOREIGN KEY (medicine_id) REFERENCES Medicines(medicine_id) ON DELETE RESTRICT
+);
+
+-- =============================================
+-- 8. REPORTING & ANALYTICS TABLES
+-- =============================================
+
+-- Daily sales summary (for reporting performance)
+CREATE TABLE Daily_Sales_Summary (
+    summary_id INT PRIMARY KEY AUTO_INCREMENT,
+    summary_date DATE NOT NULL UNIQUE,
+    total_sales INT DEFAULT 0,
+    total_amount DECIMAL(12,2) DEFAULT 0.00,
+    total_customers INT DEFAULT 0,
+    average_transaction DECIMAL(10,2) DEFAULT 0.00,
+    most_sold_medicine_id INT,
+    generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (most_sold_medicine_id) REFERENCES Medicines(medicine_id) ON DELETE SET NULL,
+    INDEX idx_summary_date (summary_date)
+);
+
+-- Inventory valuation
+CREATE TABLE Inventory_Valuation (
+    valuation_id INT PRIMARY KEY AUTO_INCREMENT,
+    valuation_date DATE NOT NULL,
+    total_items INT DEFAULT 0,
+    total_quantity INT DEFAULT 0,
+    total_cost_value DECIMAL(12,2) DEFAULT 0.00,
+    total_retail_value DECIMAL(12,2) DEFAULT 0.00,
+    items_near_expiry INT DEFAULT 0,
+    items_below_reorder INT DEFAULT 0,
+    generated_by INT,
+    generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (generated_by) REFERENCES Users(user_id) ON DELETE SET NULL,
+    INDEX idx_valuation_date (valuation_date)
+);
+
+-- =============================================
+-- 9. SYSTEM & CONFIGURATION TABLES
+-- =============================================
+
+-- System settings
+CREATE TABLE System_Settings (
+    setting_id INT PRIMARY KEY AUTO_INCREMENT,
+    setting_key VARCHAR(100) UNIQUE NOT NULL,
+    setting_value TEXT,
+    setting_type ENUM('String', 'Number', 'Boolean', 'JSON', 'Date') DEFAULT 'String',
+    category VARCHAR(50),
+    description TEXT,
+    is_editable BOOLEAN DEFAULT TRUE,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Audit logs for system activities
+CREATE TABLE Audit_Logs (
+    log_id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT,
+    action_type VARCHAR(50) NOT NULL,
+    table_name VARCHAR(50),
+    record_id INT,
+    old_values JSON,
+    new_values JSON,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE SET NULL,
+    INDEX idx_action_type (action_type),
+    INDEX idx_created_at (created_at),
+    INDEX idx_user_action (user_id, created_at)
+);
+
+-- =============================================
+-- 10. INITIAL DATA (OPTIONAL BUT RECOMMENDED)
+-- =============================================
+
+-- Insert default roles
+INSERT INTO Roles (role_name, description) VALUES
+('Administrator', 'Full system access'),
+('Pharmacist', 'Can manage medicines, sales, and inventory'),
+('Cashier', 'Can process sales and view inventory'),
+('Manager', 'Can view reports and manage users'),
+('Supplier', 'External supplier access');
+
+-- Insert default user (admin)
+-- Default password: admin123 (you should change this)
+INSERT INTO Users (username, password_hash, email, role_id, full_name, phone) VALUES
+('admin', '$2a$10$YourHashedPasswordHere', 'admin@pharmacy.com', 1, 'System Administrator', '+251911223344');
+
+-- Insert default categories
+INSERT INTO Categories (category_name, description) VALUES
+('Analgesics', 'Pain relief medicines'),
+('Antibiotics', 'Anti-bacterial medicines'),
+('Antipyretics', 'Fever reducing medicines'),
+('Antihistamines', 'Allergy medicines'),
+('Vitamins', 'Nutritional supplements'),
+('Cough & Cold', 'Respiratory medicines'),
+('Gastrointestinal', 'Stomach and digestive medicines'),
+('Dermatological', 'Skin medicines'),
+('Cardiovascular', 'Heart and blood pressure medicines'),
+('Other', 'Other categories');
+
+-- Insert default adjustment reasons
+INSERT INTO Adjustment_Reasons (reason_name, description, affects_cost) VALUES
+('Damaged Stock', 'Stock damaged during handling', TRUE),
+('Expired Stock', 'Stock expired and removed', TRUE),
+('Theft/Loss', 'Stock lost or stolen', TRUE),
+('Counting Error', 'Correction of counting error', FALSE),
+('Donation', 'Medicine donated', TRUE),
+('Sample', 'Given as sample to doctors', TRUE),
+('Other', 'Other reasons', FALSE);
+
+-- Insert default customer types
+INSERT INTO Customer_Types (type_name, discount_percentage, description) VALUES
+('Regular', 0.00, 'Regular customers'),
+('Senior Citizen', 10.00, 'Customers above 60 years'),
+('Loyal Customer', 5.00, 'Customers with loyalty points'),
+('Staff', 15.00, 'Pharmacy staff'),
+('Doctor', 20.00, 'Medical professionals');
+
+-- Insert system settings
+INSERT INTO System_Settings (setting_key, setting_value, setting_type, category, description) VALUES
+('pharmacy_name', 'City Pharmacy', 'String', 'General', 'Name of the pharmacy'),
+('pharmacy_address', 'Addis Ababa, Ethiopia', 'String', 'General', 'Address of the pharmacy'),
+('pharmacy_phone', '+251112233445', 'String', 'General', 'Contact phone number'),
+('tax_rate', '15', 'Number', 'Billing', 'Tax percentage to apply'),
+('currency', 'ETB', 'String', 'Billing', 'Currency symbol'),
+('low_stock_threshold', '10', 'Number', 'Inventory', 'Low stock warning level'),
+('expiry_warning_days', '30', 'Number', 'Inventory', 'Days before expiry to warn'),
+('backup_frequency', 'daily', 'String', 'System', 'Database backup frequency');
+
+-- =============================================
+-- 11. STORED PROCEDURES & FUNCTIONS (OPTIONAL)
+-- =============================================
+
+DELIMITER //
+
+-- Procedure to update stock after sale
+CREATE PROCEDURE UpdateStockAfterSale(
+    IN p_medicine_id INT,
+    IN p_quantity_sold INT,
+    IN p_batch_number VARCHAR(50),
+    IN p_sale_id INT,
+    IN p_user_id INT
+)
+BEGIN
+    DECLARE v_old_quantity INT;
+    DECLARE v_new_quantity INT;
+    
+    -- Get current stock
+    SELECT quantity INTO v_old_quantity 
+    FROM Medicines 
+    WHERE medicine_id = p_medicine_id;
+    
+    -- Calculate new quantity
+    SET v_new_quantity = v_old_quantity - p_quantity_sold;
+    
+    -- Update medicine stock
+    UPDATE Medicines 
+    SET quantity = v_new_quantity,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE medicine_id = p_medicine_id;
+    
+    -- Log stock movement
+    INSERT INTO Stock_Movements (
+        medicine_id,
+        batch_number,
+        movement_type,
+        reference_id,
+        quantity_change,
+        stock_before,
+        stock_after,
+        unit_price,
+        total_value,
+        performed_by
+    ) VALUES (
+        p_medicine_id,
+        p_batch_number,
+        'Sale',
+        p_sale_id,
+        -p_quantity_sold,
+        v_old_quantity,
+        v_new_quantity,
+        (SELECT price FROM Medicines WHERE medicine_id = p_medicine_id),
+        (SELECT price FROM Medicines WHERE medicine_id = p_medicine_id) * p_quantity_sold,
+        p_user_id
+    );
+END //
+
+-- Function to check expiry status
+CREATE FUNCTION CheckExpiryStatus(p_medicine_id INT)
+RETURNS VARCHAR(20)
+DETERMINISTIC
+BEGIN
+    DECLARE v_expiry_date DATE;
+    DECLARE v_days_remaining INT;
+    
+    SELECT expiry_date INTO v_expiry_date
+    FROM Medicines 
+    WHERE medicine_id = p_medicine_id;
+    
+    SET v_days_remaining = DATEDIFF(v_expiry_date, CURDATE());
+    
+    IF v_days_remaining < 0 THEN
+        RETURN 'Expired';
+    ELSEIF v_days_remaining <= 30 THEN
+        RETURN 'Expiring Soon';
+    ELSE
+        RETURN 'Good';
+    END IF;
+END //
+
+DELIMITER ;
+
+-- =============================================
+-- 12. VIEWS FOR REPORTING
+-- =============================================
+
+-- View for low stock medicines
+CREATE VIEW vw_Low_Stock_Medicines AS
+SELECT 
+    m.medicine_id,
+    m.medicine_code,
+    m.name,
+    m.brand,
+    m.quantity,
+    m.reorder_level,
+    m.expiry_date,
+    c.category_name,
+    s.name as supplier_name,
+    CASE 
+        WHEN m.quantity <= 0 THEN 'Out of Stock'
+        WHEN m.quantity <= m.reorder_level THEN 'Low Stock'
+        ELSE 'In Stock'
+    END as stock_status
+FROM Medicines m
+LEFT JOIN Categories c ON m.category_id = c.category_id
+LEFT JOIN Suppliers s ON m.supplier_id = s.supplier_id
+WHERE m.is_active = TRUE AND m.quantity <= m.reorder_level;
+
+-- View for daily sales report
+CREATE VIEW vw_Daily_Sales AS
+SELECT 
+    DATE(s.sale_date) as sale_day,
+    COUNT(DISTINCT s.sale_id) as total_transactions,
+    COUNT(DISTINCT s.customer_id) as total_customers,
+    SUM(s.total_amount) as daily_revenue,
+    AVG(s.total_amount) as avg_transaction_value,
+    SUM(si.quantity) as total_items_sold
+FROM Sales s
+JOIN Sale_Items si ON s.sale_id = si.sale_id
+WHERE s.payment_status = 'Paid'
+GROUP BY DATE(s.sale_date);
+
+-- View for expiry tracking
+CREATE VIEW vw_Expiry_Tracking AS
+SELECT 
+    m.medicine_id,
+    m.medicine_code,
+    m.name,
+    m.brand,
+    m.batch_number,
+    m.expiry_date,
+    m.quantity,
+    DATEDIFF(m.expiry_date, CURDATE()) as days_until_expiry,
+    CASE 
+        WHEN DATEDIFF(m.expiry_date, CURDATE()) < 0 THEN 'EXPIRED'
+        WHEN DATEDIFF(m.expiry_date, CURDATE()) <= 30 THEN 'WITHIN 30 DAYS'
+        WHEN DATEDIFF(m.expiry_date, CURDATE()) <= 90 THEN 'WITHIN 90 DAYS'
+        ELSE 'SAFE'
+    END as expiry_status,
+    s.name as supplier_name
+FROM Medicines m
+LEFT JOIN Suppliers s ON m.supplier_id = s.supplier_id
+WHERE m.quantity > 0 AND m.is_active = TRUE
+ORDER BY m.expiry_date ASC;
+
+-- =============================================
+-- 13. INDEXES FOR PERFORMANCE
+-- =============================================
+
+-- Additional indexes for better performance
+CREATE INDEX idx_medicines_active ON Medicines(is_active);
+CREATE INDEX idx_sales_customer_date ON Sales(customer_id, sale_date);
+CREATE INDEX idx_purchase_orders_status_date ON Purchase_Orders(status, order_date);
+CREATE INDEX idx_stock_movements_medicine ON Stock_Movements(medicine_id, movement_date);
+CREATE INDEX idx_medicines_category ON Medicines(category_id);
+CREATE INDEX idx_medicines_supplier ON Medicines(supplier_id);
+
+-- =============================================
+-- 14. TRIGGERS FOR DATA INTEGRITY
+-- =============================================
+
+DELIMITER //
+
+-- Trigger to update customer's total purchases
+CREATE TRIGGER trg_UpdateCustomerTotalPurchases
+AFTER INSERT ON Sales
+FOR EACH ROW
+BEGIN
+    IF NEW.customer_id IS NOT NULL AND NEW.payment_status = 'Paid' THEN
+        UPDATE Customers 
+        SET total_purchases = total_purchases + NEW.total_amount,
+            loyalty_points = loyalty_points + FLOOR(NEW.total_amount / 100), -- 1 point per 100 ETB
+            updated_at = CURRENT_TIMESTAMP
+        WHERE customer_id = NEW.customer_id;
+    END IF;
+END //
+
+-- Trigger to update medicine updated_at timestamp
+CREATE TRIGGER trg_UpdateMedicineTimestamp
+BEFORE UPDATE ON Medicines
+FOR EACH ROW
+BEGIN
+    SET NEW.updated_at = CURRENT_TIMESTAMP;
+END //
+
+-- Trigger to prevent negative stock
+CREATE TRIGGER trg_PreventNegativeStock
+BEFORE UPDATE ON Medicines
+FOR EACH ROW
+BEGIN
+    IF NEW.quantity < 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Stock quantity cannot be negative';
+    END IF;
+END //
+
+DELIMITER ;
+
+-- =============================================
+-- END OF DATABASE SCHEMA
+-- =============================================
