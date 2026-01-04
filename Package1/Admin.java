@@ -1,0 +1,31 @@
+package Package1;
+
+
+/**
+ * @author mindelah
+ * @version 1.0
+ * @created 25-Dec-2025 10:43:59 PM
+ */
+public class Admin {
+
+	public Admin(){
+
+	}
+
+	public void finalize() throws Throwable {
+
+	}
+
+	public backupData(){
+
+	}
+
+	public manageUsers(){
+
+	}
+
+	public systemConfiguration(){
+
+	}
+
+}
